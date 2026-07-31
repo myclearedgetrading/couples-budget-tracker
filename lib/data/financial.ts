@@ -113,8 +113,12 @@ export type SessionUser = {
 
 export async function requireUser(): Promise<SessionUser> {
   const session = await auth.getSession();
-  if (!session?.user?.id) throw new Error("Please sign in to continue.");
-  return session.user;
+  const user =
+    session && typeof session === "object" && "user" in session
+      ? (session as { user?: SessionUser | null }).user
+      : null;
+  if (!user?.id) throw new Error("Please sign in to continue.");
+  return user;
 }
 
 const chosenHouseholdSql = `

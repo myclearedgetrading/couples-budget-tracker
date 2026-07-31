@@ -55,52 +55,60 @@ export default function OnboardingPage() {
 
   function finish(skip = false) {
     startTransition(async () => {
-      if (skip) {
-        const result = await skipOnboardingAction();
-        if (!result.ok) {
-          toast.error(result.message);
+      try {
+        if (skip) {
+          const result = await skipOnboardingAction();
+          if (!result?.ok) {
+            toast.error(result?.message ?? "Could not skip setup.");
+            return;
+          }
+          toast.success("Household created. You can finish setup anytime.");
+          router.replace("/dashboard");
+          router.refresh();
           return;
         }
-        toast.success("Household created. You can finish setup anytime.");
+
+        if (!form.yourName.trim() || !form.householdName.trim()) {
+          toast.error("Enter your name and household name.");
+          setStep(1);
+          return;
+        }
+        if (!form.incomeSource.trim() || !Number(form.incomeAmount)) {
+          toast.error("Add at least one income source.");
+          setStep(2);
+          return;
+        }
+
+        const result = await completeOnboardingAction({
+          yourName: form.yourName,
+          partnerName: form.partnerName,
+          householdName: form.householdName,
+          currencyCode: form.currencyCode,
+          monthlySavingsGoal: Number(form.monthlySavingsGoal || 0),
+          incomeSource: form.incomeSource,
+          incomeAmount: Number(form.incomeAmount),
+          incomeDate: form.incomeDate,
+          incomeRecurring: form.incomeRecurring,
+          selectedBills: selected,
+        });
+
+        if (!result?.ok) {
+          toast.error(result?.message ?? "We could not finish setup.");
+          return;
+        }
+
+        toast.success("Your household is ready", {
+          description: "Welcome to Couples Budget.",
+        });
         router.replace("/dashboard");
         router.refresh();
-        return;
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "We could not finish setup. Please try again.",
+        );
       }
-
-      if (!form.yourName.trim() || !form.householdName.trim()) {
-        toast.error("Enter your name and household name.");
-        setStep(1);
-        return;
-      }
-      if (!form.incomeSource.trim() || !Number(form.incomeAmount)) {
-        toast.error("Add at least one income source.");
-        setStep(2);
-        return;
-      }
-
-      const result = await completeOnboardingAction({
-        yourName: form.yourName,
-        partnerName: form.partnerName,
-        householdName: form.householdName,
-        currencyCode: form.currencyCode,
-        monthlySavingsGoal: Number(form.monthlySavingsGoal || 0),
-        incomeSource: form.incomeSource,
-        incomeAmount: Number(form.incomeAmount),
-        incomeDate: form.incomeDate,
-        incomeRecurring: form.incomeRecurring,
-        selectedBills: selected,
-      });
-
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-
-      toast.success("Your household is ready", {
-        description: "Welcome to Couples Budget.",
-      });
-      router.replace("/dashboard");
-      router.refresh();
     });
   }
 

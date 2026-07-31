@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/data/financial";
 import { getSql } from "@/lib/db";
@@ -20,7 +19,10 @@ const onboardingSchema = z.object({
   selectedBills: z.array(z.string().trim().min(1)).max(20),
 });
 
-const billTemplates: Record<string, { category: string; amount: number; dueDay: number }> = {
+const billTemplates: Record<
+  string,
+  { category: string; amount: number; dueDay: number }
+> = {
   "Rent or mortgage": { category: "Housing", amount: 1950, dueDay: 1 },
   Electricity: { category: "Utilities", amount: 180, dueDay: 4 },
   Water: { category: "Utilities", amount: 75, dueDay: 8 },
@@ -50,14 +52,29 @@ export type OnboardingResult =
   | { ok: true }
   | { ok: false; message: string };
 
+function errorMessage(error: unknown, fallback: string) {
+  if (error instanceof z.ZodError) {
+    return error.issues[0]?.message ?? "Check your onboarding details.";
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+}
+
 export async function completeOnboardingAction(
   input: z.infer<typeof onboardingSchema>,
 ): Promise<OnboardingResult> {
+  let step = "start";
   try {
+    step = "validate";
     const data = onboardingSchema.parse(input);
+
+    step = "auth";
     const user = await requireUser();
     const sql = getSql();
 
+    step = "membership-check";
     const existing = await sql`
       select household_id
       from household_members
@@ -65,38 +82,48 @@ export async function completeOnboardingAction(
       limit 1
     `;
     if (existing[0]) {
-      redirect("/dashboard");
+      revalidatePath("/dashboard");
+      revalidatePath("/onboarding");
+      return { ok: true };
     }
 
+    step = "profile";
     await sql`
       insert into profiles (id, email, full_name)
-      values (${user.id}, ${user.email ?? "unknown@example.com"}, ${data.yourName})
+      values (
+        ${user.id},
+        ${user.email ?? "unknown@example.com"},
+        ${data.yourName}
+      )
       on conflict (id) do update
         set full_name = excluded.full_name,
-            email = coalesce(excluded.email, profiles.email),
+            email = coalesce(nullif(excluded.email, 'unknown@example.com'), profiles.email),
             updated_at = now()
     `;
 
+    step = "preferences";
     await sql`
       insert into user_preferences (user_id)
       values (${user.id})
       on conflict (user_id) do nothing
     `;
 
-    const householdName = data.householdName.trim();
+    step = "household";
     const households = await sql`
       insert into households (name, owner_id, currency_code)
-      values (${householdName}, ${user.id}, ${data.currencyCode})
+      values (${data.householdName.trim()}, ${user.id}, ${data.currencyCode})
       returning id
     `;
     const householdId = String(households[0].id);
 
+    step = "default-household";
     await sql`
       update user_preferences
       set default_household_id = ${householdId}
       where user_id = ${user.id}
     `;
 
+    step = "categories";
     for (const [name, kind, color, sortOrder] of defaultCategories) {
       await sql`
         insert into categories (household_id, name, kind, color, sort_order)
@@ -105,35 +132,42 @@ export async function completeOnboardingAction(
       `;
     }
 
+    step = "budget-month";
     const months = await sql`
       insert into budget_months (household_id, month_start, created_by)
       values (${householdId}, date_trunc('month', current_date)::date, ${user.id})
       on conflict (household_id, month_start) do update
         set updated_at = now()
-      returning id, month_start
+      returning id
     `;
     const monthId = String(months[0].id);
-    const monthStart = toDateOnly(months[0].month_start);
 
+    step = "income";
     const incomeCategory = await sql`
       select id from categories
       where household_id = ${householdId} and name = 'Paycheck' and kind = 'income'
       limit 1
     `;
-
     await sql`
       insert into income (
         household_id, budget_month_id, category_id, received_by,
         description, amount, received_on, is_recurring, created_by
       )
       values (
-        ${householdId}, ${monthId}, ${incomeCategory[0]?.id ?? null}, ${user.id},
-        ${data.incomeSource}, ${data.incomeAmount}, ${toDateOnly(data.incomeDate)},
-        ${data.incomeRecurring}, ${user.id}
+        ${householdId},
+        ${monthId},
+        ${incomeCategory[0]?.id ?? null},
+        ${user.id},
+        ${data.incomeSource},
+        ${data.incomeAmount},
+        ${toDateOnly(data.incomeDate)},
+        ${data.incomeRecurring},
+        ${user.id}
       )
     `;
 
     if (data.monthlySavingsGoal > 0) {
+      step = "savings-goal";
       await sql`
         insert into savings_goals (
           household_id, name, target_amount, target_date, created_by
@@ -148,6 +182,7 @@ export async function completeOnboardingAction(
       `;
     }
 
+    step = "bills";
     for (const billName of data.selectedBills) {
       const template = billTemplates[billName] ?? {
         category: "Other",
@@ -164,56 +199,45 @@ export async function completeOnboardingAction(
       if (!category[0]) continue;
 
       const dueDay = Math.min(template.dueDay, 28);
-      const dueDate = `${monthStart.slice(0, 8)}${String(dueDay).padStart(2, "0")}`;
-
+      const dayOffset = dueDay - 1;
       await sql`
         insert into bills (
           household_id, budget_month_id, category_id, name, amount,
           due_date, is_recurring, created_by
         )
         values (
-          ${householdId}, ${monthId}, ${category[0].id}, ${billName},
-          ${template.amount}, ${dueDate}::date, true, ${user.id}
+          ${householdId},
+          ${monthId},
+          ${category[0].id},
+          ${billName},
+          ${template.amount},
+          (date_trunc('month', current_date)::date + ${dayOffset}::integer),
+          true,
+          ${user.id}
         )
       `;
-    }
-
-    if (data.partnerName.trim()) {
-      // Partner invitation is optional during onboarding; settings handles invites.
     }
 
     revalidatePath("/dashboard");
     revalidatePath("/onboarding");
     return { ok: true };
   } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "digest" in error &&
-      String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
-    ) {
-      throw error;
-    }
-    if (error instanceof z.ZodError) {
-      return {
-        ok: false,
-        message: error.issues[0]?.message ?? "Check your onboarding details.",
-      };
-    }
+    console.error(`[onboarding] failed at ${step}`, error);
     return {
       ok: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "We could not finish setup. Please try again.",
+      message: `${errorMessage(error, "We could not finish setup. Please try again.")} (${step})`,
     };
   }
 }
 
 export async function skipOnboardingAction(): Promise<OnboardingResult> {
+  let step = "start";
   try {
+    step = "auth";
     const user = await requireUser();
     const sql = getSql();
+
+    step = "membership-check";
     const existing = await sql`
       select household_id
       from household_members
@@ -222,21 +246,32 @@ export async function skipOnboardingAction(): Promise<OnboardingResult> {
     `;
     if (existing[0]) return { ok: true };
 
+    step = "profile";
     await sql`
       insert into profiles (id, email, full_name)
-      values (${user.id}, ${user.email ?? "unknown@example.com"}, ${user.name ?? "Household owner"})
+      values (
+        ${user.id},
+        ${user.email ?? "unknown@example.com"},
+        ${user.name ?? "Household owner"}
+      )
       on conflict (id) do update
         set full_name = coalesce(profiles.full_name, excluded.full_name),
             updated_at = now()
     `;
 
+    step = "household";
     const households = await sql`
       insert into households (name, owner_id, currency_code)
-      values (${`${user.name?.split(" ")[0] ?? "My"} Household`}, ${user.id}, 'USD')
+      values (
+        ${`${user.name?.split(" ")[0] ?? "My"} Household`},
+        ${user.id},
+        'USD'
+      )
       returning id
     `;
     const householdId = String(households[0].id);
 
+    step = "preferences";
     await sql`
       insert into user_preferences (user_id, default_household_id)
       values (${user.id}, ${householdId})
@@ -244,6 +279,7 @@ export async function skipOnboardingAction(): Promise<OnboardingResult> {
         set default_household_id = excluded.default_household_id
     `;
 
+    step = "categories";
     for (const [name, kind, color, sortOrder] of defaultCategories) {
       await sql`
         insert into categories (household_id, name, kind, color, sort_order)
@@ -252,20 +288,20 @@ export async function skipOnboardingAction(): Promise<OnboardingResult> {
       `;
     }
 
+    step = "budget-month";
     await sql`
       insert into budget_months (household_id, month_start, created_by)
       values (${householdId}, date_trunc('month', current_date)::date, ${user.id})
       on conflict (household_id, month_start) do nothing
     `;
 
+    revalidatePath("/dashboard");
     return { ok: true };
   } catch (error) {
+    console.error(`[onboarding:skip] failed at ${step}`, error);
     return {
       ok: false,
-      message:
-        error instanceof Error
-          ? error.message
-          : "We could not create your household.",
+      message: `${errorMessage(error, "We could not create your household.")} (${step})`,
     };
   }
 }
