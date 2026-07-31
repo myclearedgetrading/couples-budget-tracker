@@ -32,6 +32,7 @@ export type IncomeView = {
   category: string | null;
   categoryId: string | null;
   receivedBy: string | null;
+  receivedById: string | null;
 };
 export type TransactionView = {
   id: string;
@@ -287,7 +288,7 @@ export const getFinancialData = cache(async function getFinancialData(options?: 
       [householdId, user.id, monthId],
     ),
     sql.query(
-      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, i.category_id, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = $3 and ${memberGuard} order by i.received_on desc, i.created_at desc`,
+      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, i.category_id, i.received_by as received_by_id, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = $3 and ${memberGuard} order by i.received_on desc, i.created_at desc`,
       [householdId, user.id, monthId],
     ),
     sql.query(
@@ -374,6 +375,7 @@ export const getFinancialData = cache(async function getFinancialData(options?: 
       category: s(r.category),
       categoryId: s(r.category_id),
       receivedBy: s(r.received_by),
+      receivedById: s(r.received_by_id),
     })),
     transactions: transactionRows.map((r) => ({
       id: String(r.id),

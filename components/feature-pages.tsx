@@ -67,11 +67,69 @@ export function BillsFeaturePage({data}:PageProps) {
 }
 
 export function IncomeFeaturePage({data}:PageProps) {
-  const [form,setForm]=useState(false); const [editing,setEditing]=useState<IncomeView|null>(null); const {pending,run,remove}=useMutation(); const total=data.income.reduce((s,i)=>s+i.amount,0);
+  const [form,setForm]=useState(false); const [editing,setEditing]=useState<IncomeView|null>(null); const {pending,run,remove}=useMutation();
   const openAdd=()=>{setEditing(null);setForm(true)}; const openEdit=(i:IncomeView)=>{setEditing(i);setForm(true)}; const closeForm=()=>{setForm(false);setEditing(null)};
-  return <div><Heading title="Income" description="Track income received by your household." action="Add income" onAction={openAdd} data={data}/><Summary items={[["Household income",formatCurrency(total)],["Entries",String(data.income.length)],["Recurring",String(data.income.filter(i=>i.recurring).length)],["Latest",data.income[0]?day(data.income[0].receivedOn):"None yet"]]}/>
-    <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]"><Card><h2 className="font-bold">Monthly income</h2>{!data.reports.length?<Empty title="No trend yet" body="Monthly income will appear after you record it."/>:<div className="mt-4 h-64"><ResponsiveContainer><BarChart data={data.reports}><CartesianGrid stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false}/><XAxis dataKey="month" tickFormatter={v=>day(String(v))} axisLine={false} tickLine={false}/><YAxis hide/><Tooltip formatter={v=>formatCurrency(Number(v))}/><Bar dataKey="income" fill="#00a866" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></div>}</Card>
-    <Card><h2 className="font-bold">Income entries</h2>{!data.income.length?<Empty title="No income recorded" body="Add paychecks or other household income."/>:<div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">{data.income.map(i=><div key={i.id} className="flex items-center gap-3 py-4"><span className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"><CircleDollarSign className="size-5"/></span><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{i.description}</p><p className="text-xs text-slate-500">{i.receivedBy??"Household"} · {day(i.receivedOn)}</p></div><b className="text-sm">{formatCurrency(i.amount)}</b><button onClick={()=>openEdit(i)} aria-label={`Edit ${i.description}`}><Pencil className="size-4 text-slate-400 hover:text-emerald-600"/></button><button onClick={()=>remove("income",i.id)} aria-label={`Delete ${i.description}`}><Trash2 className="size-4 text-slate-400"/></button></div>)}</div>}</Card></div>
+  const total=data.income.reduce((s,i)=>s+i.amount,0);
+  const memberIds=new Set(data.members.map(m=>m.id));
+  const groups=[
+    ...data.members.map(m=>({
+      key:m.id,
+      name:m.name,
+      entries:data.income.filter(i=>i.receivedById===m.id),
+    })),
+    {
+      key:"other",
+      name:"Other",
+      entries:data.income.filter(i=>!i.receivedById||!memberIds.has(i.receivedById)),
+    },
+  ].filter(g=>g.entries.length>0||(g.key!=="other"&&data.members.length>0));
+  const summaryItems:[string,string,string?][]=[
+    ["Household income",formatCurrency(total)],
+    ["Entries",String(data.income.length)],
+    ...data.members.slice(0,2).map(m=>{
+      const amount=data.income.filter(i=>i.receivedById===m.id).reduce((s,i)=>s+i.amount,0);
+      return [m.name.split(/\s+/)[0]??m.name,formatCurrency(amount),"text-emerald-600"] as [string,string,string?];
+    }),
+  ];
+  if(summaryItems.length<4)summaryItems.push(["Recurring",String(data.income.filter(i=>i.recurring).length)]);
+
+  return <div><Heading title="Income" description="Track each paycheck and income entry separately." action="Add income" onAction={openAdd} data={data}/>
+    <Summary items={summaryItems.slice(0,4)}/>
+    <Card className="mt-4"><h2 className="font-bold">Monthly income</h2>{!data.reports.length?<Empty title="No trend yet" body="Monthly income will appear after you record it."/>:<div className="mt-4 h-64"><ResponsiveContainer><BarChart data={data.reports}><CartesianGrid stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false}/><XAxis dataKey="month" tickFormatter={v=>day(String(v))} axisLine={false} tickLine={false}/><YAxis hide/><Tooltip formatter={v=>formatCurrency(Number(v))}/><Bar dataKey="income" fill="#00a866" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer></div>}</Card>
+    {!data.income.length?<div className="mt-4"><Empty title="No income recorded" body="Add paychecks or other household income — each entry is kept separate."/></div>:(
+      <div className="mt-4 space-y-4">
+        {groups.map(group=>{
+          const groupTotal=group.entries.reduce((s,i)=>s+i.amount,0);
+          return <Card key={group.key}>
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-100 pb-4 dark:border-slate-800">
+              <div>
+                <h2 className="font-bold">{group.name}</h2>
+                <p className="mt-1 text-xs text-slate-500">{group.entries.length} {group.entries.length===1?"entry":"entries"} this month</p>
+              </div>
+              <b className="text-lg text-emerald-600">{formatCurrency(groupTotal)}</b>
+            </div>
+            {!group.entries.length?<p className="mt-4 text-sm text-slate-500">No income entries yet.</p>:(
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {group.entries.map(i=>(
+                  <article key={i.id} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="grid size-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"><CircleDollarSign className="size-5"/></span>
+                      <div className="flex items-center gap-3">
+                        <button onClick={()=>openEdit(i)} aria-label={`Edit ${i.description}`}><Pencil className="size-4 text-slate-400 hover:text-emerald-600"/></button>
+                        <button onClick={()=>remove("income",i.id)} aria-label={`Delete ${i.description}`}><Trash2 className="size-4 text-slate-400 hover:text-red-500"/></button>
+                      </div>
+                    </div>
+                    <h3 className="mt-3 text-sm font-bold">{i.description}</h3>
+                    <p className="mt-1 text-xs text-slate-500">{i.category??"Income"} · {day(i.receivedOn)}{i.recurring?" · Recurring":""}</p>
+                    <b className="mt-4 block text-lg">{formatCurrency(i.amount)}</b>
+                  </article>
+                ))}
+              </div>
+            )}
+          </Card>;
+        })}
+      </div>
+    )}
     {form&&<RecordForm key={editing?.id??"new"} kind="income" data={data} pending={pending} close={closeForm}
       defaults={editing?{id:editing.id,description:editing.description,amount:String(editing.amount),receivedOn:editing.receivedOn,categoryId:editing.categoryId??undefined,recurring:editing.recurring}:undefined}
       submit={fd=>run(()=>editing?updateIncomeAction(fd):createIncomeAction(fd),closeForm)}/>}</div>;
