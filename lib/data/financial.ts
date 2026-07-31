@@ -131,6 +131,29 @@ const chosenHouseholdSql = `
   limit 1
 `;
 
+/**
+ * Opens the current calendar month, carrying recurring bills, recurring income
+ * and category budgets over from the previous month the household used.
+ *
+ * Reads call this too, not just writes: bills are scoped to a single month, so
+ * if the month were only created on the next mutation the household would open
+ * the app on the 1st to an empty budget. The SQL function takes an advisory lock
+ * and copies at most once per month, so calling it on every request is safe.
+ */
+export async function ensureCurrentMonth(
+  sql: ReturnType<typeof getSql>,
+  householdId: string,
+  userId: string,
+): Promise<string> {
+  const rows = await sql.query(
+    `select public.ensure_budget_month($1, date_trunc('month', current_date)::date, $2) as id`,
+    [householdId, userId],
+  );
+  const id = (rows[0] as Record<string, unknown> | undefined)?.id;
+  if (!id) throw new Error("We could not open this month's budget.");
+  return String(id);
+}
+
 export async function getFinancialData(): Promise<FinancialData> {
   const user = await requireUser();
   const sql = getSql();
@@ -157,6 +180,7 @@ export async function getFinancialData(): Promise<FinancialData> {
   }
 
   const householdId = String(householdRow.id);
+  const monthId = await ensureCurrentMonth(sql, householdId, user.id);
   const memberGuard = `exists (
     select 1 from household_members access
     where access.household_id = $1 and access.user_id = $2 and access.status = 'active'
@@ -177,8 +201,8 @@ export async function getFinancialData(): Promise<FinancialData> {
     preferenceRows,
   ] = await Promise.all([
     sql.query(
-      `select bm.id, bm.month_start, bm.status from budget_months bm where bm.household_id = $1 and ${memberGuard} order by (bm.month_start = date_trunc('month', current_date)::date) desc, bm.month_start desc limit 1`,
-      [householdId, user.id],
+      `select bm.id, bm.month_start, bm.status from budget_months bm where bm.id = $3 and bm.household_id = $1 and ${memberGuard}`,
+      [householdId, user.id, monthId],
     ),
     sql.query(
       `select hm.user_id as id, coalesce(p.full_name, p.email, 'Household member') as name from household_members hm join profiles p on p.id = hm.user_id where hm.household_id = $1 and hm.status = 'active' and ${memberGuard} order by hm.role, hm.joined_at`,
@@ -189,20 +213,20 @@ export async function getFinancialData(): Promise<FinancialData> {
       [householdId, user.id],
     ),
     sql.query(
-      `select b.id, b.name, b.amount, b.due_date, b.status, b.is_recurring, b.category_id, c.name as category, coalesce(p.full_name, p.email) as assigned from bills b join categories c on c.id = b.category_id and c.household_id = b.household_id left join profiles p on p.id = coalesce(b.paid_by, b.created_by) where b.household_id = $1 and b.budget_month_id = (select id from budget_months where household_id = $1 order by (month_start = date_trunc('month', current_date)::date) desc, month_start desc limit 1) and ${memberGuard} order by b.due_date, b.created_at`,
-      [householdId, user.id],
+      `select b.id, b.name, b.amount, b.due_date, b.status, b.is_recurring, b.category_id, c.name as category, coalesce(p.full_name, p.email) as assigned from bills b join categories c on c.id = b.category_id and c.household_id = b.household_id left join profiles p on p.id = coalesce(b.paid_by, b.created_by) where b.household_id = $1 and b.budget_month_id = $3 and ${memberGuard} order by b.due_date, b.created_at`,
+      [householdId, user.id, monthId],
     ),
     sql.query(
-      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = (select id from budget_months where household_id = $1 order by (month_start = date_trunc('month', current_date)::date) desc, month_start desc limit 1) and ${memberGuard} order by i.received_on desc, i.created_at desc`,
-      [householdId, user.id],
+      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = $3 and ${memberGuard} order by i.received_on desc, i.created_at desc`,
+      [householdId, user.id, monthId],
     ),
     sql.query(
-      `select t.id, t.description, t.amount, t.transaction_date, t.kind, t.category_id, c.name as category, coalesce(p.full_name, p.email) as paid_by from transactions t left join categories c on c.id = t.category_id and c.household_id = t.household_id left join profiles p on p.id = t.paid_by where t.household_id = $1 and t.budget_month_id = (select id from budget_months where household_id = $1 order by (month_start = date_trunc('month', current_date)::date) desc, month_start desc limit 1) and ${memberGuard} order by t.transaction_date desc, t.created_at desc`,
-      [householdId, user.id],
+      `select t.id, t.description, t.amount, t.transaction_date, t.kind, t.category_id, c.name as category, coalesce(p.full_name, p.email) as paid_by from transactions t left join categories c on c.id = t.category_id and c.household_id = t.household_id left join profiles p on p.id = t.paid_by where t.household_id = $1 and t.budget_month_id = $3 and ${memberGuard} order by t.transaction_date desc, t.created_at desc`,
+      [householdId, user.id, monthId],
     ),
     sql.query(
-      `select cb.id, c.name as category, coalesce(c.color, '#64748B') as color, cb.amount, coalesce(sum(case when t.kind = 'expense' then t.amount when t.kind = 'refund' then -t.amount else 0 end), 0) as spent from category_budgets cb join categories c on c.id = cb.category_id and c.household_id = cb.household_id left join transactions t on t.household_id = cb.household_id and t.budget_month_id = cb.budget_month_id and t.category_id = cb.category_id where cb.household_id = $1 and cb.budget_month_id = (select id from budget_months where household_id = $1 order by (month_start = date_trunc('month', current_date)::date) desc, month_start desc limit 1) and ${memberGuard} group by cb.id, c.name, c.color, cb.amount order by c.name`,
-      [householdId, user.id],
+      `select cb.id, c.name as category, coalesce(c.color, '#64748B') as color, cb.amount, coalesce(sum(case when t.kind = 'expense' then t.amount when t.kind = 'refund' then -t.amount else 0 end), 0) as spent from category_budgets cb join categories c on c.id = cb.category_id and c.household_id = cb.household_id left join transactions t on t.household_id = cb.household_id and t.budget_month_id = cb.budget_month_id and t.category_id = cb.category_id where cb.household_id = $1 and cb.budget_month_id = $3 and ${memberGuard} group by cb.id, c.name, c.color, cb.amount order by c.name`,
+      [householdId, user.id, monthId],
     ),
     sql.query(
       `select g.id, g.name, g.target_amount, g.target_date, g.is_completed, coalesce(sum(sc.amount), 0) as saved from savings_goals g left join savings_contributions sc on sc.savings_goal_id = g.id and sc.household_id = g.household_id where g.household_id = $1 and ${memberGuard} group by g.id order by g.is_completed, g.created_at`,

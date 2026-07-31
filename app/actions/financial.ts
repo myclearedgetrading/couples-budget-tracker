@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getMutationContext } from "@/lib/data/financial";
+import { ensureCurrentMonth, getMutationContext } from "@/lib/data/financial";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 
@@ -27,28 +27,6 @@ function friendlyError(error: unknown) {
   return "We could not save that change. Please try again.";
 }
 
-async function currentMonth(sql: Awaited<ReturnType<typeof getMutationContext>>["sql"], householdId: string, userId: string) {
-  const rows = await sql.query(
-    `with access as (
-       select hm.household_id from household_members hm
-       where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
-     ), inserted as (
-       insert into budget_months (household_id, month_start, created_by)
-       select access.household_id, date_trunc('month', current_date)::date, $2 from access
-       on conflict (household_id, month_start) do nothing
-       returning id
-     )
-     select id from inserted
-     union all
-     select bm.id from budget_months bm join access on access.household_id = bm.household_id
-     where bm.month_start = date_trunc('month', current_date)::date
-     limit 1`,
-    [householdId, userId],
-  );
-  if (!rows[0]?.id) throw new Error("We could not open this month's budget.");
-  return String(rows[0].id);
-}
-
 export async function createBillAction(form: FormData): Promise<ActionResult> {
   try {
     const input = z.object({ name: text, amount, dueDate: date, categoryId: z.string().optional(), categoryName: z.string().trim().max(80).optional(), recurring: z.boolean() }).parse({
@@ -58,7 +36,7 @@ export async function createBillAction(form: FormData): Promise<ActionResult> {
       recurring: value(form, "recurring") === "on",
     });
     const { sql, userId, householdId } = await getMutationContext();
-    const monthId = await currentMonth(sql, householdId, userId);
+    const monthId = await ensureCurrentMonth(sql, householdId, userId);
     const rows = await sql.query(
       `with access as (
          select hm.household_id from household_members hm
@@ -95,7 +73,7 @@ export async function createIncomeAction(form: FormData): Promise<ActionResult> 
       categoryId: String(value(form, "categoryId") ?? "") || undefined, recurring: value(form, "recurring") === "on",
     });
     const { sql, userId, householdId } = await getMutationContext();
-    const monthId = await currentMonth(sql, householdId, userId);
+    const monthId = await ensureCurrentMonth(sql, householdId, userId);
     const rows = await sql.query(
       `with access as (
          select hm.household_id from household_members hm
@@ -122,7 +100,7 @@ export async function createTransactionAction(form: FormData): Promise<ActionRes
       categoryId: String(value(form, "categoryId") ?? "") || undefined, kind: value(form, "kind") ?? "expense",
     });
     const { sql, userId, householdId } = await getMutationContext();
-    const monthId = await currentMonth(sql, householdId, userId);
+    const monthId = await ensureCurrentMonth(sql, householdId, userId);
     const rows = await sql.query(
       `with access as (
          select hm.household_id from household_members hm

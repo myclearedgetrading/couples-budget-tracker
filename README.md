@@ -16,11 +16,12 @@ A shared household budgeting app for couples, built with Next.js, Neon Postgres,
    npm install
    ```
 2. Copy `.env.example` to `.env.local` and fill in your Neon values.
-3. Apply the schema:
+3. Apply the migrations in order:
    ```bash
-   node scripts/apply-migration.mjs
+   npm run db:migrate -- database/migrations/0001_initial_schema.sql
+   npm run db:migrate -- database/migrations/0002_month_rollover.sql
    ```
-   (`DATABASE_URL` must be set in the environment.)
+   (`DATABASE_URL` is read from `.env.local`.)
 4. In Neon Auth, allow localhost and add your production origin as a trusted origin.
 5. Start the app:
    ```bash
