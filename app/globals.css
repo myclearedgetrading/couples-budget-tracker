@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f6f8f7;
   --foreground: #111827;
@@ -9,6 +11,31 @@
   --muted: #64748b;
   --line: #e5e7eb;
   --gold: #d4af37;
+  --surface: rgba(255, 255, 255, 0.94);
+  --surface-border: rgba(229, 231, 235, 0.9);
+  --panel: #ffffff;
+  --panel-muted: #f8fafc;
+  --input-bg: #ffffff;
+  --ring: #d1fae5;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #0b1220;
+  --foreground: #e5e7eb;
+  --navy: #020617;
+  --emerald: #00c878;
+  --emerald-bright: #34d399;
+  --muted: #94a3b8;
+  --line: #1f2937;
+  --gold: #e0c15a;
+  --surface: rgba(15, 23, 42, 0.92);
+  --surface-border: rgba(51, 65, 85, 0.9);
+  --panel: #111827;
+  --panel-muted: #0f172a;
+  --input-bg: #0f172a;
+  --ring: rgba(16, 185, 129, 0.2);
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -40,15 +67,28 @@ button { cursor: pointer; }
   color: #064e3b;
 }
 
+.dark ::selection {
+  background: rgba(16, 185, 129, 0.35);
+  color: #ecfdf5;
+}
+
 .surface {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(229, 231, 235, 0.9);
+  background: var(--surface);
+  border: 1px solid var(--surface-border);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 12px 30px rgba(15, 23, 42, 0.04);
+}
+
+.dark .surface {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 16px 40px rgba(0, 0, 0, 0.28);
 }
 
 .dot-grid {
   background-image: radial-gradient(rgba(15, 23, 42, 0.09) 0.7px, transparent 0.7px);
   background-size: 18px 18px;
+}
+
+.dark .dot-grid {
+  background-image: radial-gradient(rgba(148, 163, 184, 0.14) 0.7px, transparent 0.7px);
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -60,7 +100,18 @@ button { cursor: pointer; }
 }
 .animate-rise { animation: rise 600ms ease-out both; }
 
+input, select, textarea {
+  background-color: var(--input-bg);
+  color: var(--foreground);
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #64748b;
+}
+
 @media print {
   .no-print { display: none !important; }
-  body { background: white; }
+  body { background: white; color: black; }
+  .dark body { background: white; color: black; }
 }

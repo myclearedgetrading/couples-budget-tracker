@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
-import { Toaster } from "sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { ThemedToaster } from "@/components/themed-toaster";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,6 +18,20 @@ export const metadata: Metadata = {
     "A shared household budget built for two. Track bills, spending, income, and savings together.",
 };
 
+const themeBootScript = `
+(function () {
+  try {
+    var stored = localStorage.getItem("cbt-theme");
+    var theme = stored === "light" || stored === "dark" ? stored : "dark";
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    document.documentElement.style.colorScheme = theme;
+  } catch (error) {
+    document.documentElement.classList.add("dark");
+    document.documentElement.style.colorScheme = "dark";
+  }
+})();
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -25,11 +40,17 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} h-full antialiased`}
+      className={`${geistSans.variable} dark h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full">
-        {children}
-        <Toaster richColors position="top-right" />
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className="min-h-full bg-background text-foreground">
+        <ThemeProvider>
+          {children}
+          <ThemedToaster />
+        </ThemeProvider>
       </body>
     </html>
   );

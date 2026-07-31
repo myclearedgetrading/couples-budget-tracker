@@ -14,6 +14,7 @@ import {
   completeOnboardingAction,
   skipOnboardingAction,
 } from "@/app/actions/onboarding";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const suggestedBills = [
   "Rent or mortgage",
@@ -104,7 +105,7 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f8f7] px-4 py-7 sm:px-6">
+    <div className="min-h-screen bg-[#f6f8f7] px-4 py-7 dark:bg-[#0b1220] sm:px-6">
       <div className="mx-auto max-w-3xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 font-bold">
@@ -113,13 +114,16 @@ export default function OnboardingPage() {
             </span>
             Couples Budget
           </div>
-          <button
-            disabled={pending}
-            onClick={() => finish(true)}
-            className="text-xs font-bold text-slate-500 disabled:opacity-50"
-          >
-            Skip for now
-          </button>
+          <div className="flex items-center gap-3">
+            <ThemeToggle compact />
+            <button
+              disabled={pending}
+              onClick={() => finish(true)}
+              className="text-xs font-bold text-slate-500 disabled:opacity-50 dark:text-slate-400"
+            >
+              Skip for now
+            </button>
+          </div>
         </div>
 
         <div className="mt-10 flex items-center gap-2">
@@ -129,24 +133,24 @@ export default function OnboardingPage() {
                 className={`grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold ${
                   i <= step
                     ? "bg-brand text-white"
-                    : "bg-slate-200 text-slate-500"
+                    : "bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
                 }`}
               >
                 {i < step ? <Check className="size-3.5" /> : i}
               </span>
               <div
                 className={`h-1 flex-1 rounded-full ${
-                  i <= step ? "bg-brand" : "bg-slate-200"
+                  i <= step ? "bg-brand" : "bg-slate-200 dark:bg-slate-800"
                 } ${i === 3 ? "hidden" : ""}`}
               />
             </div>
           ))}
         </div>
 
-        <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 sm:p-10">
+        <div className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-xl shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/30 sm:p-10">
           {step === 1 && (
             <div>
-              <span className="grid size-12 place-items-center rounded-2xl bg-emerald-50 text-brand">
+              <span className="grid size-12 place-items-center rounded-2xl bg-emerald-50 text-brand dark:bg-emerald-950/50">
                 <Heart />
               </span>
               <h1 className="mt-5 text-3xl font-bold">Set up your household</h1>
@@ -202,7 +206,7 @@ export default function OnboardingPage() {
 
           {step === 2 && (
             <div>
-              <span className="grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+              <span className="grid size-12 place-items-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300">
                 <Sparkles />
               </span>
               <h1 className="mt-5 text-3xl font-bold">Add monthly income</h1>
@@ -230,7 +234,7 @@ export default function OnboardingPage() {
                   onChange={(value) => update("incomeDate", value)}
                   required
                 />
-                <label className="flex items-center gap-3 self-end rounded-xl bg-slate-50 p-4 text-xs font-bold">
+                <label className="flex items-center gap-3 self-end rounded-xl bg-slate-50 p-4 text-xs font-bold dark:bg-slate-950">
                   <input
                     type="checkbox"
                     checked={form.incomeRecurring}
@@ -247,7 +251,7 @@ export default function OnboardingPage() {
 
           {step === 3 && (
             <div>
-              <span className="grid size-12 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+              <span className="grid size-12 place-items-center rounded-2xl bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300">
                 <Check />
               </span>
               <h1 className="mt-5 text-3xl font-bold">Choose your common bills</h1>
@@ -268,8 +272,8 @@ export default function OnboardingPage() {
                     key={bill}
                     className={`flex items-center justify-between rounded-xl border p-4 text-left text-sm font-semibold ${
                       selected.includes(bill)
-                        ? "border-emerald-400 bg-emerald-50"
-                        : "border-slate-200"
+                        ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40"
+                        : "border-slate-200 dark:border-slate-700"
                     }`}
                   >
                     {bill}
@@ -277,7 +281,7 @@ export default function OnboardingPage() {
                       className={`grid size-5 place-items-center rounded-full ${
                         selected.includes(bill)
                           ? "bg-brand text-white"
-                          : "border border-slate-300"
+                          : "border border-slate-300 dark:border-slate-600"
                       }`}
                     >
                       {selected.includes(bill) && <Check className="size-3" />}
@@ -291,12 +295,12 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          <div className="mt-10 flex justify-between border-t border-slate-100 pt-6">
+          <div className="mt-10 flex justify-between border-t border-slate-100 pt-6 dark:border-slate-800">
             <button
               type="button"
               disabled={step === 1 || pending}
               onClick={() => setStep(step - 1)}
-              className="flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold text-slate-600 disabled:opacity-0"
+              className="flex h-11 items-center gap-2 rounded-xl px-4 text-sm font-bold text-slate-600 disabled:opacity-0 dark:text-slate-300"
             >
               <ArrowLeft className="size-4" />
               Back
@@ -343,7 +347,7 @@ function Field({
         placeholder={placeholder}
         min={type === "number" ? "0" : undefined}
         step={type === "number" ? "0.01" : undefined}
-        className="mt-2 h-12 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-emerald-400"
+        className="mt-2 h-12 w-full rounded-xl border border-slate-200 px-3 font-normal outline-none focus:border-emerald-400 dark:border-slate-700"
       />
     </label>
   );

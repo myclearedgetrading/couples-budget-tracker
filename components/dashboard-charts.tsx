@@ -25,11 +25,11 @@ export function BudgetBarChart({ data }: { data: BudgetView[] }) {
     <div className="h-70">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} barGap={4} margin={{ left: -18, right: 4, top: 12 }}>
-          <CartesianGrid stroke="#eef0f2" vertical={false} />
+          <CartesianGrid stroke="currentColor" className="text-slate-200 dark:text-slate-800" vertical={false} />
           <XAxis dataKey="category" axisLine={false} tickLine={false} tick={{fontSize:11, fill:"#64748b"}} />
           <YAxis axisLine={false} tickLine={false} tick={{fontSize:11, fill:"#94a3b8"}} tickFormatter={(v)=>`$${v/1000}k`} />
-          <Tooltip formatter={(value) => formatCurrency(Number(value))} cursor={{fill:"#f8fafc"}} />
-          <Bar dataKey="amount" name="Budgeted" fill="#dbe3e0" radius={[5,5,0,0]} />
+          <Tooltip formatter={(value) => formatCurrency(Number(value))} cursor={{fill:"rgba(148,163,184,0.12)"}} />
+          <Bar dataKey="amount" name="Budgeted" fill="#64748b" radius={[5,5,0,0]} />
           <Bar dataKey="spent" name="Actual" fill="#00a866" radius={[5,5,0,0]} />
         </BarChart>
       </ResponsiveContainer>
@@ -38,5 +38,5 @@ export function BudgetBarChart({ data }: { data: BudgetView[] }) {
 }
 
 function ChartEmpty({ message }: { message: string }) {
-  return <div className="grid h-56 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500">{message}</div>;
+  return <div className="grid h-56 place-items-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/60">{message}</div>;
 }

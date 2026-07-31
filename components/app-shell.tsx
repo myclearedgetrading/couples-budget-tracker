@@ -19,6 +19,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { authClient } from "@/lib/auth/client";
 import { cn, initials } from "@/lib/utils";
 
@@ -66,7 +67,7 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f7f6]">
+    <div className="min-h-screen bg-[#f5f7f6] dark:bg-[#0b1220]">
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-navy text-white lg:flex">
         <Link
           href="/"
@@ -124,21 +125,24 @@ export function AppShell({
       </aside>
 
       <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 flex h-17 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl sm:px-7 lg:px-9">
+        <header className="sticky top-0 z-30 flex h-17 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/80 sm:px-7 lg:px-9">
           <div className="flex items-center gap-3 lg:hidden">
-            <button aria-label="Open menu">
+            <button aria-label="Open menu" className="text-slate-700 dark:text-slate-200">
               <Menu className="size-5" />
             </button>
             <Heart className="size-6 fill-emerald-500 text-emerald-500" />
           </div>
           <div className="hidden lg:block">
-            <p className="text-xs font-medium text-slate-500">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
               Good morning, {firstName}
             </p>
-            <p className="text-sm font-bold">Let&apos;s make this month count.</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              Let&apos;s make this month count.
+            </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="relative grid size-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600">
+            <ThemeToggle compact />
+            <button className="relative grid size-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
               <Bell className="size-4" />
             </button>
             <span className="grid size-9 place-items-center rounded-full bg-navy text-xs font-bold text-white">
@@ -158,7 +162,7 @@ export function AppShell({
       >
         <Plus />
       </Link>
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid h-17 grid-cols-5 border-t border-slate-200 bg-white px-2 lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid h-17 grid-cols-5 border-t border-slate-200 bg-white px-2 dark:border-slate-800 dark:bg-slate-950 lg:hidden">
         {nav.slice(0, 5).map(({ href, label, icon: Icon }) => {
           const active = pathname === href;
           return (
@@ -167,7 +171,7 @@ export function AppShell({
               href={href}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 text-[10px] font-medium text-slate-400",
-                active && "text-emerald-600",
+                active && "text-emerald-600 dark:text-emerald-400",
               )}
             >
               <Icon className="size-5" />

@@ -30,8 +30,8 @@ export default function InvitePage({
   }
 
   return (
-    <div className="grid min-h-screen place-items-center bg-[#f6f8f7] px-5">
-      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-900/5">
+    <div className="grid min-h-screen place-items-center bg-[#f6f8f7] px-5 dark:bg-[#0b1220]">
+      <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-900/5 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/30">
         <div className="flex items-center gap-2 font-bold">
           <span className="grid size-10 place-items-center rounded-xl bg-navy text-brand-bright">
             <Heart className="size-5 fill-current" />
@@ -41,7 +41,7 @@ export default function InvitePage({
         <h1 className="mt-8 text-3xl font-bold tracking-tight">
           Join your household
         </h1>
-        <p className="mt-3 text-sm leading-6 text-slate-500">
+        <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
           Sign in with the invited email address, then accept to share the same
           budget with your partner.
         </p>
@@ -53,9 +53,12 @@ export default function InvitePage({
           {pending && <Loader2 className="size-4 animate-spin" />}
           Accept invitation
         </button>
-        <p className="mt-5 text-center text-sm text-slate-500">
+        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
           Need an account first?{" "}
-          <Link href={`/signup?next=/invite/${token}`} className="font-bold text-emerald-700">
+          <Link
+            href={`/signup?next=/invite/${token}`}
+            className="font-bold text-emerald-700 dark:text-emerald-400"
+          >
             Create one
           </Link>
         </p>
