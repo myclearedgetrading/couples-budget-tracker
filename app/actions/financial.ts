@@ -66,6 +66,46 @@ export async function createBillAction(form: FormData): Promise<ActionResult> {
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 
+export async function updateBillAction(form: FormData): Promise<ActionResult> {
+  try {
+    const input = z.object({ id, name: text, amount, dueDate: date, categoryId: z.string().optional(), categoryName: z.string().trim().max(80).optional(), recurring: z.boolean() }).parse({
+      id: value(form, "id"), name: value(form, "name"), amount: value(form, "amount"), dueDate: value(form, "dueDate"),
+      categoryId: String(value(form, "categoryId") ?? "") || undefined,
+      categoryName: String(value(form, "categoryName") ?? "") || undefined,
+      recurring: value(form, "recurring") === "on",
+    });
+    const { sql, userId, householdId } = await getMutationContext();
+    const rows = await sql.query(
+      `with access as (
+         select hm.household_id from household_members hm
+         where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
+       ), valid_category as (
+         select c.id, c.household_id from categories c join access on access.household_id = c.household_id
+         where c.id = nullif($3, '')::uuid and c.kind = 'expense' and not c.is_archived
+       ), inserted_category as (
+         insert into categories (household_id, name, kind)
+         select access.household_id, coalesce(nullif($4, ''), 'Bills'), 'expense' from access
+         where nullif($3, '') is null
+         on conflict (household_id, name, kind) do update set is_archived = false
+         returning id, household_id
+       ), chosen_category as (
+         select id, household_id from valid_category
+         union all select id, household_id from inserted_category
+         limit 1
+       )
+       update bills b
+       set name = $6, amount = $7, due_date = $8, is_recurring = $9, category_id = chosen_category.id
+       from chosen_category
+       where b.id = $5 and b.household_id = chosen_category.household_id
+       returning b.id`,
+      [householdId, userId, input.categoryId ?? "", input.categoryName ?? "", input.id, input.name, input.amount, input.dueDate, input.recurring],
+    );
+    if (!rows[0]) throw new Error("That bill is no longer available.");
+    refreshFinancialPages();
+    return { ok: true, message: "Bill updated." };
+  } catch (error) { return { ok: false, message: friendlyError(error) }; }
+}
+
 export async function createIncomeAction(form: FormData): Promise<ActionResult> {
   try {
     const input = z.object({ description: text, amount, receivedOn: date, categoryId: z.string().optional(), recurring: z.boolean() }).parse({
@@ -90,6 +130,35 @@ export async function createIncomeAction(form: FormData): Promise<ActionResult> 
     if (!rows[0]) throw new Error("You no longer have access to this household.");
     refreshFinancialPages();
     return { ok: true, message: "Income recorded." };
+  } catch (error) { return { ok: false, message: friendlyError(error) }; }
+}
+
+export async function updateIncomeAction(form: FormData): Promise<ActionResult> {
+  try {
+    const input = z.object({ id, description: text, amount, receivedOn: date, categoryId: z.string().optional(), recurring: z.boolean() }).parse({
+      id: value(form, "id"), description: value(form, "description"), amount: value(form, "amount"), receivedOn: value(form, "receivedOn"),
+      categoryId: String(value(form, "categoryId") ?? "") || undefined, recurring: value(form, "recurring") === "on",
+    });
+    const { sql, userId, householdId } = await getMutationContext();
+    const rows = await sql.query(
+      `with access as (
+         select hm.household_id from household_members hm
+         where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
+       ), valid_category as (
+         select c.id from categories c join access on access.household_id = c.household_id
+         where c.id = nullif($3, '')::uuid and c.kind = 'income' and not c.is_archived
+       )
+       update income i
+       set description = $5, amount = $6, received_on = $7, is_recurring = $8,
+           category_id = (select id from valid_category)
+       from access
+       where i.id = $4 and i.household_id = access.household_id
+       returning i.id`,
+      [householdId, userId, input.categoryId ?? "", input.id, input.description, input.amount, input.receivedOn, input.recurring],
+    );
+    if (!rows[0]) throw new Error("That income entry is no longer available.");
+    refreshFinancialPages();
+    return { ok: true, message: "Income updated." };
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 
@@ -120,6 +189,35 @@ export async function createTransactionAction(form: FormData): Promise<ActionRes
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 
+export async function updateTransactionAction(form: FormData): Promise<ActionResult> {
+  try {
+    const input = z.object({ id, description: text, amount, transactionDate: date, categoryId: z.string().optional(), kind: z.enum(["expense", "refund", "transfer"]) }).parse({
+      id: value(form, "id"), description: value(form, "description"), amount: value(form, "amount"), transactionDate: value(form, "transactionDate"),
+      categoryId: String(value(form, "categoryId") ?? "") || undefined, kind: value(form, "kind") ?? "expense",
+    });
+    const { sql, userId, householdId } = await getMutationContext();
+    const rows = await sql.query(
+      `with access as (
+         select hm.household_id from household_members hm
+         where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
+       ), valid_category as (
+         select c.id from categories c join access on access.household_id = c.household_id
+         where c.id = nullif($3, '')::uuid and c.kind = 'expense' and not c.is_archived
+       )
+       update transactions t
+       set description = $5, amount = $6, transaction_date = $7, kind = $8,
+           category_id = (select id from valid_category)
+       from access
+       where t.id = $4 and t.household_id = access.household_id
+       returning t.id`,
+      [householdId, userId, input.categoryId ?? "", input.id, input.description, input.amount, input.transactionDate, input.kind],
+    );
+    if (!rows[0]) throw new Error("That transaction is no longer available.");
+    refreshFinancialPages();
+    return { ok: true, message: "Transaction updated." };
+  } catch (error) { return { ok: false, message: friendlyError(error) }; }
+}
+
 export async function createSavingsGoalAction(form: FormData): Promise<ActionResult> {
   try {
     const input = z.object({ name: text, targetAmount: amount, targetDate: z.union([date, z.literal("")]) }).parse({
@@ -138,6 +236,30 @@ export async function createSavingsGoalAction(form: FormData): Promise<ActionRes
     if (!rows[0]) throw new Error("You no longer have access to this household.");
     refreshFinancialPages();
     return { ok: true, message: "Savings goal created." };
+  } catch (error) { return { ok: false, message: friendlyError(error) }; }
+}
+
+export async function updateSavingsGoalAction(form: FormData): Promise<ActionResult> {
+  try {
+    const input = z.object({ id, name: text, targetAmount: amount, targetDate: z.union([date, z.literal("")]) }).parse({
+      id: value(form, "id"), name: value(form, "name"), targetAmount: value(form, "targetAmount"), targetDate: value(form, "targetDate") ?? "",
+    });
+    const { sql, userId, householdId } = await getMutationContext();
+    const rows = await sql.query(
+      `with access as (
+         select hm.household_id from household_members hm
+         where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
+       )
+       update savings_goals g
+       set name = $4, target_amount = $5, target_date = nullif($6, '')::date
+       from access
+       where g.id = $3 and g.household_id = access.household_id
+       returning g.id`,
+      [householdId, userId, input.id, input.name, input.targetAmount, input.targetDate],
+    );
+    if (!rows[0]) throw new Error("That savings goal is no longer available.");
+    refreshFinancialPages();
+    return { ok: true, message: "Savings goal updated." };
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 
@@ -166,22 +288,28 @@ export async function createSavingsContributionAction(form: FormData): Promise<A
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 
-export async function markBillPaidAction(recordId: string): Promise<ActionResult> {
+export async function setBillPaidAction(recordId: string, paid: boolean): Promise<ActionResult> {
   try {
     const billId = id.parse(recordId);
+    const isPaid = z.boolean().parse(paid);
     const { sql, userId, householdId } = await getMutationContext();
+    // bills_paid_fields requires paid_at/paid_by to be null unless the bill is
+    // paid, so reverting has to clear both rather than only move the status.
     const rows = await sql.query(
       `with access as (
          select hm.household_id from household_members hm
          where hm.household_id = $1 and hm.user_id = $2 and hm.status = 'active'
        )
-       update bills b set status = 'paid', paid_at = now(), paid_by = $2
+       update bills b
+       set status = (case when $4::boolean then 'paid' else 'planned' end)::bill_status,
+           paid_at = case when $4::boolean then now() else null end,
+           paid_by = case when $4::boolean then $2::uuid else null end
        from access where b.id = $3 and b.household_id = access.household_id returning b.id`,
-      [householdId, userId, billId],
+      [householdId, userId, billId, isPaid],
     );
     if (!rows[0]) throw new Error("That bill is no longer available.");
     refreshFinancialPages();
-    return { ok: true, message: "Bill marked as paid." };
+    return { ok: true, message: isPaid ? "Bill marked as paid." : "Bill moved back to planned." };
   } catch (error) { return { ok: false, message: friendlyError(error) }; }
 }
 

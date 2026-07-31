@@ -1,8 +1,9 @@
 import "server-only";
 
+import { cache } from "react";
 import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
-import { toDateOnly } from "@/lib/utils";
+import { parseMonthParam, toDateOnly } from "@/lib/utils";
 
 export type MemberOption = { id: string; name: string };
 export type CategoryOption = {
@@ -29,6 +30,7 @@ export type IncomeView = {
   receivedOn: string;
   recurring: boolean;
   category: string | null;
+  categoryId: string | null;
   receivedBy: string | null;
 };
 export type TransactionView = {
@@ -86,6 +88,10 @@ export type FinancialData = {
     timezone: string;
   } | null;
   month: { id: string; monthStart: string; status: "open" | "closed" } | null;
+  /** True when the selected month is the household's current calendar month. */
+  isCurrentMonth: boolean;
+  /** First-of-month dates the household already has (newest first), for navigation. */
+  availableMonths: string[];
   members: MemberOption[];
   categories: CategoryOption[];
   bills: BillView[];
@@ -111,7 +117,7 @@ export type SessionUser = {
   image?: string | null;
 };
 
-export async function requireUser(): Promise<SessionUser> {
+export const requireUser = cache(async (): Promise<SessionUser> => {
   const session = await auth.getSession();
   const user =
     session && typeof session === "object" && "user" in session
@@ -119,7 +125,7 @@ export async function requireUser(): Promise<SessionUser> {
       : null;
   if (!user?.id) throw new Error("Please sign in to continue.");
   return user;
-}
+});
 
 const chosenHouseholdSql = `
   select h.id, h.name, h.currency_code, h.timezone
@@ -130,6 +136,17 @@ const chosenHouseholdSql = `
   order by (h.id = up.default_household_id) desc, hm.joined_at asc
   limit 1
 `;
+
+/** Layout-only: household name without opening a budget month or loading finances. */
+export const getHouseholdName = cache(async (): Promise<string | null> => {
+  const user = await requireUser();
+  const sql = getSql();
+  const rows = (await sql.query(chosenHouseholdSql, [
+    user.id,
+  ])) as Record<string, unknown>[];
+  const row = rows[0];
+  return row ? String(row.name) : null;
+});
 
 /**
  * Opens the current calendar month, carrying recurring bills, recurring income
@@ -154,7 +171,47 @@ export async function ensureCurrentMonth(
   return String(id);
 }
 
-export async function getFinancialData(): Promise<FinancialData> {
+/**
+ * Resolves which budget month to show. The current month is always materialized
+ * (rollover). Past months are only opened if a budget_months row already exists —
+ * we never invent history by rolling over into a month the household skipped.
+ */
+async function resolveViewMonth(
+  sql: ReturnType<typeof getSql>,
+  householdId: string,
+  userId: string,
+  requestedRaw?: string,
+): Promise<{ monthId: string; monthStart: string; isCurrentMonth: boolean }> {
+  const currentId = await ensureCurrentMonth(sql, householdId, userId);
+  const currentRows = await sql.query(
+    `select month_start from budget_months where id = $1 and household_id = $2`,
+    [currentId, householdId],
+  );
+  const currentStart = toDateOnly(
+    (currentRows[0] as Record<string, unknown> | undefined)?.month_start,
+  );
+  const requested = parseMonthParam(requestedRaw);
+  if (!requested || requested >= currentStart) {
+    return { monthId: currentId, monthStart: currentStart, isCurrentMonth: true };
+  }
+  const past = await sql.query(
+    `select id from budget_months where household_id = $1 and month_start = $2::date`,
+    [householdId, requested],
+  );
+  const pastId = (past[0] as Record<string, unknown> | undefined)?.id;
+  if (!pastId) {
+    return { monthId: currentId, monthStart: currentStart, isCurrentMonth: true };
+  }
+  return {
+    monthId: String(pastId),
+    monthStart: requested,
+    isCurrentMonth: false,
+  };
+}
+
+export const getFinancialData = cache(async function getFinancialData(options?: {
+  monthStart?: string;
+}): Promise<FinancialData> {
   const user = await requireUser();
   const sql = getSql();
   const households = (await sql.query(chosenHouseholdSql, [
@@ -165,6 +222,8 @@ export async function getFinancialData(): Promise<FinancialData> {
     return {
       household: null,
       month: null,
+      isCurrentMonth: true,
+      availableMonths: [],
       members: [],
       categories: [],
       bills: [],
@@ -180,7 +239,13 @@ export async function getFinancialData(): Promise<FinancialData> {
   }
 
   const householdId = String(householdRow.id);
-  const monthId = await ensureCurrentMonth(sql, householdId, user.id);
+  const resolved = await resolveViewMonth(
+    sql,
+    householdId,
+    user.id,
+    options?.monthStart,
+  );
+  const monthId = resolved.monthId;
   const memberGuard = `exists (
     select 1 from household_members access
     where access.household_id = $1 and access.user_id = $2 and access.status = 'active'
@@ -188,6 +253,7 @@ export async function getFinancialData(): Promise<FinancialData> {
 
   const [
     months,
+    availableMonthRows,
     memberRows,
     categoryRows,
     billRows,
@@ -205,6 +271,10 @@ export async function getFinancialData(): Promise<FinancialData> {
       [householdId, user.id, monthId],
     ),
     sql.query(
+      `select bm.month_start from budget_months bm where bm.household_id = $1 and ${memberGuard} order by bm.month_start desc limit 36`,
+      [householdId, user.id],
+    ),
+    sql.query(
       `select hm.user_id as id, coalesce(p.full_name, p.email, 'Household member') as name from household_members hm join profiles p on p.id = hm.user_id where hm.household_id = $1 and hm.status = 'active' and ${memberGuard} order by hm.role, hm.joined_at`,
       [householdId, user.id],
     ),
@@ -217,7 +287,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       [householdId, user.id, monthId],
     ),
     sql.query(
-      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = $3 and ${memberGuard} order by i.received_on desc, i.created_at desc`,
+      `select i.id, i.description, i.amount, i.received_on, i.is_recurring, i.category_id, c.name as category, coalesce(p.full_name, p.email) as received_by from income i left join categories c on c.id = i.category_id and c.household_id = i.household_id left join profiles p on p.id = i.received_by where i.household_id = $1 and i.budget_month_id = $3 and ${memberGuard} order by i.received_on desc, i.created_at desc`,
       [householdId, user.id, monthId],
     ),
     sql.query(
@@ -270,6 +340,10 @@ export async function getFinancialData(): Promise<FinancialData> {
           status: monthRow.status as "open" | "closed",
         }
       : null,
+    isCurrentMonth: resolved.isCurrentMonth,
+    availableMonths: availableMonthRows.map((r) =>
+      toDateOnly((r as Record<string, unknown>).month_start),
+    ),
     members: memberRows.map((r) => ({
       id: String(r.id),
       name: String(r.name),
@@ -298,6 +372,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       receivedOn: toDateOnly(r.received_on),
       recurring: Boolean(r.is_recurring),
       category: s(r.category),
+      categoryId: s(r.category_id),
       receivedBy: s(r.received_by),
     })),
     transactions: transactionRows.map((r) => ({
@@ -357,7 +432,7 @@ export async function getFinancialData(): Promise<FinancialData> {
         }
       : null,
   };
-}
+});
 
 export async function getMutationContext() {
   const user = await requireUser();

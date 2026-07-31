@@ -16,6 +16,26 @@ export const metadata: Metadata = {
   },
   description:
     "A shared household budget built for two. Track bills, spending, income, and savings together.",
+  applicationName: "Couples Budget",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000"),
+  ),
+  openGraph: {
+    type: "website",
+    siteName: "Couples Budget Tracker",
+    title: "Couples Budget Tracker",
+    description:
+      "A shared household budget built for two. Track bills, spending, income, and savings together.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Couples Budget Tracker",
+    description:
+      "A shared household budget built for two. Track bills, spending, income, and savings together.",
+  },
 };
 
 const themeBootScript = `

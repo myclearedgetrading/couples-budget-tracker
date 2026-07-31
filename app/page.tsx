@@ -1,8 +1,9 @@
 import Link from "next/link";
 import {
   ArrowRight, BarChart3, BellRing, Check, ChevronDown, Heart, LockKeyhole,
-  Menu, PiggyBank, ReceiptText, ShieldCheck, Sparkles, Target, UsersRound, WalletCards,
+  PiggyBank, ReceiptText, ShieldCheck, Sparkles, Target, UsersRound, WalletCards,
 } from "lucide-react";
+import { LandingMenu } from "@/components/landing-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const benefits = [
@@ -20,7 +21,7 @@ export default function Home() {
   return (
     <div className="min-h-screen overflow-hidden bg-white text-slate-900 dark:bg-[#0b1220] dark:text-slate-100">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/80">
-        <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-5 lg:px-8">
+        <div className="relative mx-auto flex h-18 max-w-7xl items-center justify-between px-5 lg:px-8">
           <Link href="/" className="flex items-center gap-2.5 font-bold tracking-tight">
             <span className="flex size-9 items-center justify-center rounded-xl bg-navy text-brand-bright"><Heart className="size-5 fill-current" /></span>
             <span>Couples Budget</span>
@@ -38,7 +39,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2 sm:hidden">
             <ThemeToggle compact />
-            <button aria-label="Open menu"><Menu /></button>
+            <LandingMenu />
           </div>
         </div>
       </header>

@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BarChart3,
-  Bell,
   CalendarDays,
   CircleDollarSign,
   Goal,
@@ -17,6 +17,7 @@ import {
   Settings,
   ShoppingBag,
   WalletCards,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -52,9 +53,23 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
   const displayName = user.name || user.email?.split("@")[0] || "Partner";
   const firstName = displayName.split(/\s+/)[0];
   const userInitials = initials(displayName);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [menuOpen]);
 
   async function logout() {
     const result = await authClient.signOut();
@@ -124,10 +139,87 @@ export function AppShell({
         </div>
       </aside>
 
+      {menuOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <button
+            type="button"
+            aria-label="Close menu"
+            className="absolute inset-0 bg-slate-950/50"
+            onClick={() => setMenuOpen(false)}
+          />
+          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,86vw)] flex-col bg-navy text-white shadow-2xl">
+            <div className="flex h-17 items-center justify-between border-b border-white/10 px-4">
+              <div className="flex items-center gap-2 font-bold">
+                <Heart className="size-5 fill-emerald-400 text-emerald-400" />
+                Couples Budget
+              </div>
+              <button
+                type="button"
+                aria-label="Close menu"
+                onClick={() => setMenuOpen(false)}
+                className="grid size-9 place-items-center rounded-lg text-slate-300 hover:bg-white/10"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="mx-4 mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                Household
+              </p>
+              <p className="mt-2 truncate text-sm font-semibold">
+                {householdName || "Set up your household"}
+              </p>
+            </div>
+            <nav className="no-scrollbar mt-4 flex-1 space-y-1 overflow-y-auto px-3 pb-4">
+              {nav.map(({ href, label, icon: Icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-medium text-slate-400 hover:bg-white/5 hover:text-white",
+                      active && "bg-emerald-500/15 text-emerald-400",
+                    )}
+                  >
+                    <Icon className="size-5" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </nav>
+            <div className="border-t border-white/10 p-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-full bg-emerald-500 font-bold">
+                  {userInitials}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{displayName}</p>
+                  <p className="truncate text-xs text-slate-500">{user.email}</p>
+                </div>
+                <button
+                  onClick={logout}
+                  aria-label="Log out"
+                  className="text-slate-500 hover:text-white"
+                >
+                  <LogOut className="size-4" />
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 flex h-17 items-center justify-between border-b border-slate-200 bg-white/90 px-4 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-950/80 sm:px-7 lg:px-9">
           <div className="flex items-center gap-3 lg:hidden">
-            <button aria-label="Open menu" className="text-slate-700 dark:text-slate-200">
+            <button
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+              className="text-slate-700 dark:text-slate-200"
+            >
               <Menu className="size-5" />
             </button>
             <Heart className="size-6 fill-emerald-500 text-emerald-500" />
@@ -142,12 +234,13 @@ export function AppShell({
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle compact />
-            <button className="relative grid size-10 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-              <Bell className="size-4" />
-            </button>
-            <span className="grid size-9 place-items-center rounded-full bg-navy text-xs font-bold text-white">
+            <Link
+              href="/settings"
+              aria-label="Household settings"
+              className="grid size-9 place-items-center rounded-full bg-navy text-xs font-bold text-white"
+            >
               {userInitials}
-            </span>
+            </Link>
           </div>
         </header>
         <main className="mx-auto max-w-[1500px] px-4 pb-28 pt-6 sm:px-7 lg:px-9 lg:pb-12">

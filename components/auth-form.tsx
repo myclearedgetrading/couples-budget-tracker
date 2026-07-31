@@ -68,19 +68,28 @@ export function AuthForm({
       }
 
       if (isSignup) {
+        const destination = nextPath ?? "/onboarding";
         const result = await authClient.signUp.email({
           email,
           password,
           name: name.trim(),
-          callbackURL: "/onboarding",
+          callbackURL: destination,
         });
         if (result.error) throw new Error(result.error.message);
         if (result.data?.token) {
-          toast.success("Account created. Let’s set up your household.");
-          router.push("/onboarding");
+          toast.success(
+            nextPath
+              ? "Account created. Accept the invitation to join."
+              : "Account created. Let’s set up your household.",
+          );
+          router.push(destination);
         } else {
           toast.success("Account created. Check your email to continue.");
-          router.push("/login");
+          router.push(
+            nextPath
+              ? `/login?next=${encodeURIComponent(nextPath)}`
+              : "/login",
+          );
         }
       } else {
         const result = await authClient.signIn.email({
@@ -236,7 +245,15 @@ export function AuthForm({
             <p className="mt-6 text-center text-sm text-slate-500 dark:text-slate-400">
               {isSignup ? "Already have an account?" : "New to Couples Budget?"}{" "}
               <Link
-                href={isSignup ? "/login" : "/signup"}
+                href={
+                  isSignup
+                    ? nextPath
+                      ? `/login?next=${encodeURIComponent(nextPath)}`
+                      : "/login"
+                    : nextPath
+                      ? `/signup?next=${encodeURIComponent(nextPath)}`
+                      : "/signup"
+                }
                 className="font-bold text-emerald-700 dark:text-emerald-400"
               >
                 {isSignup ? "Log in" : "Create an account"}

@@ -15,11 +15,20 @@ export default function InvitePage({
   const { token } = use(params);
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const invitePath = `/invite/${token}`;
+  const loginHref = `/login?next=${encodeURIComponent(invitePath)}`;
+  const signupHref = `/signup?next=${encodeURIComponent(invitePath)}`;
 
   function accept() {
     startTransition(async () => {
       const result = await acceptInvitationAction(token);
       if (!result.ok) {
+        const needsAuth = /sign in/i.test(result.message);
+        if (needsAuth) {
+          toast.error("Sign in with the invited email to accept.");
+          router.push(loginHref);
+          return;
+        }
         toast.error(result.message);
         return;
       }
@@ -53,15 +62,26 @@ export default function InvitePage({
           {pending && <Loader2 className="size-4 animate-spin" />}
           Accept invitation
         </button>
-        <p className="mt-5 text-center text-sm text-slate-500 dark:text-slate-400">
-          Need an account first?{" "}
-          <Link
-            href={`/signup?next=/invite/${token}`}
-            className="font-bold text-emerald-700 dark:text-emerald-400"
-          >
-            Create one
-          </Link>
-        </p>
+        <div className="mt-5 space-y-2 text-center text-sm text-slate-500 dark:text-slate-400">
+          <p>
+            Already have an account?{" "}
+            <Link
+              href={loginHref}
+              className="font-bold text-emerald-700 dark:text-emerald-400"
+            >
+              Sign in
+            </Link>
+          </p>
+          <p>
+            Need an account first?{" "}
+            <Link
+              href={signupHref}
+              className="font-bold text-emerald-700 dark:text-emerald-400"
+            >
+              Create one
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

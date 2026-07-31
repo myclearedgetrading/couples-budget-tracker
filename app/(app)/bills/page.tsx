@@ -1,3 +1,12 @@
 import { BillsFeaturePage } from "@/components/feature-pages";
 import { getFinancialData } from "@/lib/data/financial";
-export default async function BillsPage() { return <BillsFeaturePage data={await getFinancialData()} />; }
+import type { MonthSearchParams } from "@/lib/month";
+
+export default async function BillsPage({
+  searchParams,
+}: {
+  searchParams: MonthSearchParams;
+}) {
+  const { month } = await searchParams;
+  return <BillsFeaturePage data={await getFinancialData({ monthStart: month })} />;
+}
