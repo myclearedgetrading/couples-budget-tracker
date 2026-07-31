@@ -15,6 +15,7 @@ import {
   skipOnboardingAction,
 } from "@/app/actions/onboarding";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { isStaleDeploymentError } from "@/lib/utils";
 
 const suggestedBills = [
   "Rent or mortgage",
@@ -103,6 +104,19 @@ export default function OnboardingPage() {
         router.replace("/dashboard");
         router.refresh();
       } catch (error) {
+        if (isStaleDeploymentError(error)) {
+          toast.error("This page is out of date", {
+            description:
+              "The app was updated while you were filling this in. Reload, then finish setup.",
+            duration: Infinity,
+            action: {
+              label: "Reload",
+              onClick: () => window.location.reload(),
+            },
+          });
+          return;
+        }
+
         toast.error(
           error instanceof Error
             ? error.message
