@@ -1,2 +1,3 @@
 import { IncomeFeaturePage } from "@/components/feature-pages";
-export default function IncomePage() { return <IncomeFeaturePage />; }
+import { getFinancialData } from "@/lib/data/financial";
+export default async function IncomePage() { return <IncomeFeaturePage data={await getFinancialData()} />; }

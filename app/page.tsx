@@ -45,7 +45,7 @@ export default function Home() {
               <p className="mx-auto mt-7 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">Track bills, spending, income, and savings in one shared dashboard built specifically for couples.</p>
               <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link href="/signup" className="inline-flex h-14 items-center justify-center gap-2 rounded-full bg-brand px-7 font-bold text-white shadow-xl shadow-emerald-500/20">Start your budget <ArrowRight className="size-4" /></Link>
-                <Link href="/dashboard?demo=true" className="inline-flex h-14 items-center justify-center rounded-full border border-slate-300 bg-white px-7 font-bold text-slate-800 shadow-sm">View live demo</Link>
+                <Link href="/login" className="inline-flex h-14 items-center justify-center rounded-full border border-slate-300 bg-white px-7 font-bold text-slate-800 shadow-sm">Log in to your account</Link>
               </div>
               <p className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-500"><ShieldCheck className="size-4 text-brand" /> Free to start · No bank connection required</p>
             </div>

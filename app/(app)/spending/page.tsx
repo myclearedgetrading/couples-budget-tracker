@@ -1,2 +1,3 @@
 import { SpendingFeaturePage } from "@/components/feature-pages";
-export default function SpendingPage() { return <SpendingFeaturePage />; }
+import { getFinancialData } from "@/lib/data/financial";
+export default async function SpendingPage() { return <SpendingFeaturePage data={await getFinancialData()} />; }

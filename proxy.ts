@@ -1,39 +1,37 @@
-import { createServerClient } from "@supabase/ssr";
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
+import { auth } from "@/lib/auth/server";
+
+const neonAuthProxy = auth.middleware({ loginUrl: "/login" });
 
 export async function proxy(request: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return NextResponse.next({ request });
+  const response = await neonAuthProxy(request);
+  const location = response.headers.get("location");
 
-  let response = NextResponse.next({ request });
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll(cookies) {
-        cookies.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
-        cookies.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
-        );
-      },
-    },
-  });
-  const { data: { user } } = await supabase.auth.getUser();
-  const protectedRoute = ["/dashboard", "/budget", "/bills", "/income", "/spending", "/savings", "/calendar", "/reports", "/settings", "/onboarding"].some((path) =>
-    request.nextUrl.pathname.startsWith(path),
-  );
-  if (protectedRoute && !user && request.nextUrl.searchParams.get("demo") !== "true") {
-    if (url) {
-      const login = request.nextUrl.clone();
-      login.pathname = "/login";
-      login.searchParams.set("next", request.nextUrl.pathname);
-      return NextResponse.redirect(login);
+  if (response.status >= 300 && response.status < 400 && location) {
+    const redirectUrl = new URL(location);
+    if (redirectUrl.pathname === "/login") {
+      redirectUrl.searchParams.set(
+        "next",
+        `${request.nextUrl.pathname}${request.nextUrl.search}`,
+      );
+      response.headers.set("location", redirectUrl.toString());
     }
   }
+
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/dashboard/:path*",
+    "/budget/:path*",
+    "/bills/:path*",
+    "/income/:path*",
+    "/spending/:path*",
+    "/savings/:path*",
+    "/calendar/:path*",
+    "/reports/:path*",
+    "/settings/:path*",
+    "/onboarding/:path*",
+  ],
 };
