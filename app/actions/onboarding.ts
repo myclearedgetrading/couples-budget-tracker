@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/data/financial";
 import { getSql } from "@/lib/db";
+import { toDateOnly } from "@/lib/utils";
 
 const onboardingSchema = z.object({
   yourName: z.string().trim().min(1, "Enter your name.").max(80),
@@ -112,7 +113,7 @@ export async function completeOnboardingAction(
       returning id, month_start
     `;
     const monthId = String(months[0].id);
-    const monthStart = String(months[0].month_start).slice(0, 10);
+    const monthStart = toDateOnly(months[0].month_start);
 
     const incomeCategory = await sql`
       select id from categories
@@ -127,7 +128,7 @@ export async function completeOnboardingAction(
       )
       values (
         ${householdId}, ${monthId}, ${incomeCategory[0]?.id ?? null}, ${user.id},
-        ${data.incomeSource}, ${data.incomeAmount}, ${data.incomeDate},
+        ${data.incomeSource}, ${data.incomeAmount}, ${toDateOnly(data.incomeDate)},
         ${data.incomeRecurring}, ${user.id}
       )
     `;
@@ -172,7 +173,7 @@ export async function completeOnboardingAction(
         )
         values (
           ${householdId}, ${monthId}, ${category[0].id}, ${billName},
-          ${template.amount}, ${dueDate}, true, ${user.id}
+          ${template.amount}, ${dueDate}::date, true, ${user.id}
         )
       `;
     }
@@ -192,6 +193,12 @@ export async function completeOnboardingAction(
       String((error as { digest?: string }).digest).startsWith("NEXT_REDIRECT")
     ) {
       throw error;
+    }
+    if (error instanceof z.ZodError) {
+      return {
+        ok: false,
+        message: error.issues[0]?.message ?? "Check your onboarding details.",
+      };
     }
     return {
       ok: false,

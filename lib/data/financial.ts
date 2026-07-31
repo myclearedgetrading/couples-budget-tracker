@@ -2,6 +2,7 @@ import "server-only";
 
 import { auth } from "@/lib/auth/server";
 import { getSql } from "@/lib/db";
+import { toDateOnly } from "@/lib/utils";
 
 export type MemberOption = { id: string; name: string };
 export type CategoryOption = {
@@ -223,6 +224,7 @@ export async function getFinancialData(): Promise<FinancialData> {
 
   const n = (value: unknown) => Number(value ?? 0);
   const s = (value: unknown) => (value == null ? null : String(value));
+  const d = (value: unknown) => (value == null ? null : toDateOnly(value));
   const monthRow = months[0] as Record<string, unknown> | undefined;
   const preference = preferenceRows[0] as Record<string, unknown> | undefined;
 
@@ -236,7 +238,7 @@ export async function getFinancialData(): Promise<FinancialData> {
     month: monthRow
       ? {
           id: String(monthRow.id),
-          monthStart: String(monthRow.month_start),
+          monthStart: toDateOnly(monthRow.month_start),
           status: monthRow.status as "open" | "closed",
         }
       : null,
@@ -254,7 +256,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       id: String(r.id),
       name: String(r.name),
       amount: n(r.amount),
-      dueDate: String(r.due_date),
+      dueDate: toDateOnly(r.due_date),
       status: r.status as BillView["status"],
       recurring: Boolean(r.is_recurring),
       category: String(r.category),
@@ -265,7 +267,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       id: String(r.id),
       description: String(r.description),
       amount: n(r.amount),
-      receivedOn: String(r.received_on),
+      receivedOn: toDateOnly(r.received_on),
       recurring: Boolean(r.is_recurring),
       category: s(r.category),
       receivedBy: s(r.received_by),
@@ -274,7 +276,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       id: String(r.id),
       description: String(r.description),
       amount: n(r.amount),
-      date: String(r.transaction_date),
+      date: toDateOnly(r.transaction_date),
       kind: r.kind as TransactionView["kind"],
       category: s(r.category),
       categoryId: s(r.category_id),
@@ -291,7 +293,7 @@ export async function getFinancialData(): Promise<FinancialData> {
       id: String(r.id),
       name: String(r.name),
       targetAmount: n(r.target_amount),
-      targetDate: s(r.target_date),
+      targetDate: d(r.target_date),
       completed: Boolean(r.is_completed),
       saved: n(r.saved),
     })),
@@ -300,12 +302,12 @@ export async function getFinancialData(): Promise<FinancialData> {
       goalId: String(r.goal_id),
       goalName: String(r.goal_name),
       amount: n(r.amount),
-      date: String(r.contributed_on),
+      date: toDateOnly(r.contributed_on),
       note: s(r.note),
     })),
     reports: reportRows
       .map((r) => ({
-        month: String(r.month),
+        month: toDateOnly(r.month),
         income: n(r.income),
         expenses: n(r.expenses),
         saved: n(r.saved),
